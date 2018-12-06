@@ -5,11 +5,16 @@ import android.content.Intent;
 import android.os.Bundle;
 import android.os.Handler;
 
+import com.tencent.connect.UserInfo;
+import com.tencent.connect.common.Constants;
 import com.tencent.connect.share.QQShare;
 import com.tencent.connect.share.QzoneShare;
 import com.tencent.tauth.IUiListener;
 import com.tencent.tauth.Tencent;
 import com.tencent.tauth.UiError;
+
+import org.json.JSONException;
+import org.json.JSONObject;
 
 import java.util.ArrayList;
 
@@ -17,7 +22,11 @@ public class RequestActivity extends Activity {
 
     private BaseUiListener mBaseUiListener = new BaseUiListener();
 
+    private LoginListener mLoginListener = new LoginListener();
+
     private boolean mIsShared = false;
+
+    private boolean mIsGetUserInfo = true;
 
     private Handler mHandler = new Handler();
 
@@ -53,7 +62,7 @@ public class RequestActivity extends Activity {
             }
 
         } else {
-            QQManager.mTencent.login(this, "all", mBaseUiListener);
+            QQManager.mTencent.login(this, "all", mLoginListener);
         }
 
     }
@@ -139,6 +148,75 @@ public class RequestActivity extends Activity {
             finish();
         }
 
+    }
+
+    private class LoginListener implements IUiListener {
+
+        @Override
+        public void onComplete(Object o) {
+
+            if (mIsGetUserInfo) {
+                mIsGetUserInfo = false;
+
+                try {
+                    JSONObject jsonObject = (JSONObject) o;
+                    int ret = jsonObject.getInt("ret");
+                    if (ret == 0) {
+                        String openID = jsonObject.getString("openid");
+                        String accessToken = jsonObject.getString("access_token");
+                        String expires = jsonObject.getString("expires_in");
+                        QQManager.mTencent.setOpenId(openID);
+                        QQManager.mTencent.setAccessToken(accessToken, expires);
+                    }
+
+                    getUserInfo();
+                } catch (JSONException e) {
+                    e.printStackTrace();
+
+                    ErrorModel model = new ErrorModel();
+                    model.setCode(-1);
+                    model.setMsg(e.getMessage());
+                    model.setDetail("登录信息获取失败");
+
+                    if (QQManager.mCallBack != null) {
+                        QQManager.mCallBack.onFail(model);
+                    }
+                    finish();
+                }
+            } else {
+                if (QQManager.mCallBack != null) {
+                    QQManager.mCallBack.onSuccess(o);
+                }
+                finish();
+            }
+
+        }
+
+        @Override
+        public void onError(UiError e) {
+            ErrorModel model = new ErrorModel();
+            if (e != null) {
+                model.setCode(e.errorCode);
+                model.setMsg(e.errorMessage);
+                model.setDetail(e.errorDetail);
+            }
+
+            if (QQManager.mCallBack != null) {
+                QQManager.mCallBack.onFail(model);
+            }
+            finish();
+        }
+
+        @Override
+        public void onCancel() {
+            finish();
+        }
+
+    }
+
+    public void getUserInfo() {
+        UserInfo userInfo = new UserInfo(this, QQManager.mTencent.getQQToken());
+        userInfo.getUserInfo(mLoginListener);
     }
 
     @Override
