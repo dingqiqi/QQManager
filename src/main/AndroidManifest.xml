@@ -39,7 +39,6 @@
         <activity
             android:name=".RequestActivity"
             android:configChanges="orientation|keyboardHidden|screenSize"
-            android:screenOrientation="portrait"
             android:theme="@style/transparentStyle"
             android:windowSoftInputMode="adjustPan" />
 

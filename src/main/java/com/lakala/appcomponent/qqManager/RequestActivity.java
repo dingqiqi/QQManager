@@ -4,9 +4,9 @@ import android.app.Activity;
 import android.content.Intent;
 import android.os.Bundle;
 import android.os.Handler;
+import android.text.TextUtils;
 
 import com.tencent.connect.UserInfo;
-import com.tencent.connect.common.Constants;
 import com.tencent.connect.share.QQShare;
 import com.tencent.connect.share.QzoneShare;
 import com.tencent.tauth.IUiListener;
@@ -26,7 +26,7 @@ public class RequestActivity extends Activity {
 
     private boolean mIsShared = false;
 
-    private boolean mIsGetUserInfo = true;
+    private boolean mIsGetUserInfo = false;
 
     private Handler mHandler = new Handler();
 
@@ -34,6 +34,8 @@ public class RequestActivity extends Activity {
     private String description;
     private String targetUrl;
     private String imageUrl;
+
+    private boolean isLogin;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -55,8 +57,11 @@ public class RequestActivity extends Activity {
                 shareToQzone(shareTitle, description, targetUrl, imageUrl);
             } else {
                 if (!QQManager.mTencent.isSessionValid()) {
+                    isLogin = true;
                     QQManager.mTencent.login(this, "all", mBaseUiListener);
                 } else {
+                    mIsShared = false;
+                    isLogin = false;
                     shareToQQ(shareTitle, description, targetUrl, imageUrl);
                 }
             }
@@ -76,7 +81,13 @@ public class RequestActivity extends Activity {
         params.putString(QQShare.SHARE_TO_QQ_TITLE, shareTitle);// 标题
         params.putString(QQShare.SHARE_TO_QQ_SUMMARY, description);// 摘要
         params.putString(QQShare.SHARE_TO_QQ_TARGET_URL, url);// 内容地址
-        params.putString(QQShare.SHARE_TO_QQ_IMAGE_URL, imageUrl);// 网络图片地址　　
+
+        if (url.startsWith("file") || url.startsWith("FILE")) {
+            params.putString(QQShare.SHARE_TO_QQ_IMAGE_LOCAL_URL, imageUrl);// 本地图片地址　　
+        } else if (url.startsWith("http") || url.startsWith("https")
+                || url.startsWith("HTTP") || url.startsWith("HTTPS")) {
+            params.putString(QQShare.SHARE_TO_QQ_IMAGE_URL, imageUrl);// 网络图片地址　　
+        }
 
         // 分享操作要在主线程中完成
         mHandler.post(new Runnable() {
@@ -97,10 +108,12 @@ public class RequestActivity extends Activity {
         qzoneParams.putString(QzoneShare.SHARE_TO_QQ_SUMMARY, description);
         qzoneParams.putString(QzoneShare.SHARE_TO_QQ_TARGET_URL, targetUrl);//必填  
 
-        ArrayList<String> imageUrlList = new ArrayList<>();
-        imageUrlList.add(imageUrl);
+        if (!TextUtils.isEmpty(imageUrl)) {
+            ArrayList<String> imageUrlList = new ArrayList<>();
+            imageUrlList.add(imageUrl);
 
-        qzoneParams.putStringArrayList(QzoneShare.SHARE_TO_QQ_IMAGE_URL, imageUrlList);
+            qzoneParams.putStringArrayList(QzoneShare.SHARE_TO_QQ_IMAGE_URL, imageUrlList);
+        }
 
         // 分享操作要在主线程中完成
         mHandler.post(new Runnable() {
@@ -119,7 +132,33 @@ public class RequestActivity extends Activity {
             if (mIsShared) {
                 mIsShared = false;
 
-                shareToQQ(shareTitle, description, targetUrl, imageUrl);
+                //存储
+                if (isLogin) {
+                    JSONObject jsonObject = (JSONObject) o;
+                    int ret = jsonObject.optInt("ret");
+                    if (ret == 0) {
+                        String openID = jsonObject.optString("openid");
+                        String accessToken = jsonObject.optString("access_token");
+                        String expires = jsonObject.optString("expires_in");
+                        QQManager.mTencent.setOpenId(openID);
+                        QQManager.mTencent.setAccessToken(accessToken, expires);
+
+                        shareToQQ(shareTitle, description, targetUrl, imageUrl);
+                    } else {
+                        ErrorModel model = new ErrorModel();
+                        model.setCode(-1);
+                        model.setMsg("授权登录失败");
+                        model.setDetail(o.toString());
+
+                        if (QQManager.mCallBack != null) {
+                            QQManager.mCallBack.onFail(model);
+                        }
+                        finish();
+                    }
+                } else {
+                    shareToQQ(shareTitle, description, targetUrl, imageUrl);
+                }
+
 
             } else {
                 if (QQManager.mCallBack != null) {
@@ -184,6 +223,16 @@ public class RequestActivity extends Activity {
                     finish();
                 }
             } else {
+                JSONObject jsonObject = (JSONObject) o;
+                int ret = jsonObject.optInt("ret");
+                if (ret == 0) {
+                    String openID = jsonObject.optString("openid");
+                    String accessToken = jsonObject.optString("access_token");
+                    String expires = jsonObject.optString("expires_in");
+                    QQManager.mTencent.setOpenId(openID);
+                    QQManager.mTencent.setAccessToken(accessToken, expires);
+                }
+
                 if (QQManager.mCallBack != null) {
                     QQManager.mCallBack.onSuccess(o);
                 }

@@ -28,9 +28,21 @@ public class QQManager {
     }
 
     public void logout(Context context) {
+        if (mTencent == null) {
+            mTencent = Tencent.createInstance(mAppId, context.getApplicationContext());
+        }
+
         if (mTencent.isSessionValid()) {
             mTencent.logout(context);
         }
+    }
+
+    public boolean isQQAppInstalled(Context context) {
+        if (mTencent == null) {
+            mTencent = Tencent.createInstance(mAppId, context.getApplicationContext());
+        }
+
+        return mTencent.isQQInstalled(context);
     }
 
     /**
